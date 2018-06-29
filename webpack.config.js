@@ -3,18 +3,32 @@ const CopyWebpackPlugin = require('copy-webpack-plugin') // 插件：复制静�
 const CleanWebpackPlugin = require('clean-webpack-plugin') // 插件：清空打包目录
 const HtmlWebpackPlugin = require('html-webpack-plugin') // 插件：生成html
 const ExtractTextWebpackPlugin = require('extract-text-webpack-plugin') // 插件：单独提取css文件
+const glob = require('glob')
+const PurifyCSSPlugin = require('purifycss-webpack')
+const WebpackParallelUglifyPlugin = require('webpack-parallel-uglify-plugin')
 const webpack = require('webpack')
 
 module.exports = {
     entry: {
         index: path.resolve(__dirname, 'src', 'index.js'),
-        page: path.resolve(__dirname, 'src', 'page.js'),
-        vendor: 'lodash' // 多个页面所需公共库文件，防止重复打包
+        page: path.resolve(__dirname, 'src', 'page.js')
+        // vendor: 'lodash' // 多个页面所需公共库文件，防止重复打包
     },
     output: {
         publicPath: '/', // 静态资源CDN地址
         path: path.resolve(__dirname, 'dist'),
         filename: '[name].[hash].js'
+    },
+    optimization: {
+        splitChunks: {
+            commons: {
+                chunks: 'initial',
+                name: 'common',
+                minChunks: 2,
+                maxInitialResquests: 5,
+                minSize: 0
+            }
+        }
     },
     resolve: {
         extensions: ['.js', '.css', '.json'],
@@ -53,11 +67,11 @@ module.exports = {
             {
                 test: /\.jsx?$/,
                 use: {
-                    loader: 'babel-loader',
-                    query: {
-                        // 同时可以把babel配置写到根目录下的.babelrc中
-                        presets: ['env', 'stage-0'] // env转换es6 stage-0转es7
-                    }
+                    loader: 'babel-loader'
+                    // query: {
+                    // 同时可以把babel配置写到根目录下的.babelrc中
+                    // presets: ['env', 'stage-0'] // env转换es6 stage-0转es7
+                    // }
                 }
             },
             {
@@ -106,8 +120,33 @@ module.exports = {
                 to: path.resolve(__dirname, 'dist/static'),
                 ignore: ['.*']
             }
-        ]),
-        new CleanWebpackPlugin([path.join(__dirname, 'dist')])
+        ]), // 拷贝static文件夹
+        new CleanWebpackPlugin([path.join(__dirname, 'dist')]), // 清空dist目录
+        new PurifyCssPlugin({
+            paths: glob.sync(__dirname, 'src/*.html')
+        }),
+        new WebpackParallelUglifyPlugin({
+            uglifyJS: {
+                output: {
+                    beautify: false, // 是否格式化
+                    commets: false // 是否需要注释
+                },
+                compress: {
+                    warnings: false, // 在UglifyJs删除没有用到的代码时不输出警告
+                    drop_console: true, // 删除所有的 `console` 语句，可以兼容ie浏览器
+                    collapse_vars: false, // 内嵌定义了但是只用到一次的变量
+                    reduce_vars: true // 提取出出现多次但是没有定义成变量去引用的静态值
+                }
+            }
+        }),
+        new webpack.DllReferencePlugin({
+            manifest: require(path.join(
+                __dirname,
+                '..',
+                'dist',
+                'mainfest.json'
+            ))
+        })
     ],
     externals: {},
     devtool: 'cheap-module-inline-source-map', // 指定加source-map的方式  eval-source-map
