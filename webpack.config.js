@@ -4,9 +4,16 @@ const CleanWebpackPlugin = require('clean-webpack-plugin') // 插件：清空打
 const HtmlWebpackPlugin = require('html-webpack-plugin') // 插件：生成html
 const ExtractTextWebpackPlugin = require('extract-text-webpack-plugin') // 插件：单独提取css文件
 const glob = require('glob')
-const PurifyCSSPlugin = require('purifycss-webpack')
+const PurifyCssPlugin = require('purifycss-webpack')
 const WebpackParallelUglifyPlugin = require('webpack-parallel-uglify-plugin')
 const webpack = require('webpack')
+const HappyPack = require('happypack')
+const os = require('os')
+const chalk = require('chalk')
+const happyThreadPool = HappyPack.ThreadPool({
+    size: os.cpus().length
+})
+const ProgressBarPlugin = require('progress-bar-webpack-plugin')
 
 module.exports = {
     entry: {
@@ -64,15 +71,21 @@ module.exports = {
                 include: path.join(__dirname, 'src'),
                 exclude: /node_modules/
             },
+            // {
+            //     test: /\.jsx?$/,
+            //     use: {
+            //         loader: 'babel-loader'
+            //         // query: {
+            //         // 同时可以把babel配置写到根目录下的.babelrc中
+            //         // presets: ['env', 'stage-0'] // env转换es6 stage-0转es7
+            //         // }
+            //     }
+            // },
             {
                 test: /\.jsx?$/,
-                use: {
-                    loader: 'babel-loader'
-                    // query: {
-                    // 同时可以把babel配置写到根目录下的.babelrc中
-                    // presets: ['env', 'stage-0'] // env转换es6 stage-0转es7
-                    // }
-                }
+                loader: 'happypack/loader?id=happy-babel-js',
+                include: [path.resolve('src')],
+                exclude: /node_modules/
             },
             {
                 // file-loader 解决css等文件中引入图片路径的问题
@@ -93,7 +106,8 @@ module.exports = {
         new HtmlWebpackPlugin({
             template: path.resolve(__dirname, 'index.html'),
             filename: 'index.html',
-            chunks: ['index', 'vendor'],
+            chunks: ['index', 'common'],
+            vendor: './vendor.dll.js', // 与dll配置文件中output.fileName对齐
             inject: 'body',
             hash: true, // 使用哈希 防止缓存
             minify: {
@@ -103,7 +117,8 @@ module.exports = {
         new HtmlWebpackPlugin({
             template: path.resolve(__dirname, 'index.html'),
             filename: 'page.html',
-            chunks: ['page', 'vendor'],
+            chunks: ['page', 'common'],
+            vendor: './vendor.dll.js', // 与dll配置文件中output.fileName对齐
             inject: 'body',
             hash: true, // 使用哈希 防止缓存
             minify: {
@@ -146,7 +161,20 @@ module.exports = {
                 'dist',
                 'mainfest.json'
             ))
-        })
+        }),
+        new HappyPack({
+            id: 'happy-babel-id',
+            loader: ['babel-loader?cacheDirectory=true'],
+            threadPool: happyThreadPool
+        }),
+        new ProgressBarPlugin({
+            format:
+                'build[:bar]' +
+                chalk.green.bold(':percent') +
+                '(:elapsed seconds)'
+        }),
+        new webpack.HotModuleReplacementPlugin(), // 模块热更新
+        new webpack.NamedModulesPlugin() // 模块热更新
     ],
     externals: {},
     devtool: 'cheap-module-inline-source-map', // 指定加source-map的方式  eval-source-map
@@ -154,6 +182,7 @@ module.exports = {
         contentBase: path.join(__dirname, 'dist'), // 静态文件根目录
         port: 8080, // 端口
         host: 'localhost',
+        hot: true,
         overlay: true,
         compress: false // 服务器返回浏览器的时候是否启动gzip压缩
     },

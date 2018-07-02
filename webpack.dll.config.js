@@ -8,7 +8,7 @@ module.exports = {
     output: {
         path: path.join(__dirname, 'dist'),
         filename: '[name].dll.js',
-        library: '_dll_[name]'
+        library: '_dll_[name]' // 全局变量名，其他模块会从此变量上获取里面模块
     },
     plugins: [
         new webpack.DllPlugin({
